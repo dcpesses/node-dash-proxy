@@ -1,0 +1,31 @@
+{
+  "name": "node-dash-proxy",
+  "version": "0.0.1",
+  "description": "",
+  "main": "bootstrapper.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node ./bootstrapper.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "argparse": "^1.0.9",
+    "babel-cli": "^6.23.0",
+    "babel-preset-env": "^1.2.1",
+    "babel-preset-es2015": "^6.22.0",
+    "babel-preset-stage-0": "^6.22.0",
+    "copy": "^0.3.0",
+    "elementtree": "^0.1.7",
+    "log4js": "^1.1.1",
+    "logging": "^3.2.0",
+    "mkdirp": "^0.5.1",
+    "path": "^0.12.7",
+    "plogging": "0.0.4",
+    "python-format": "^1.0.2",
+    "request": "^2.80.0",
+    "requests": "^0.1.7",
+    "time": "^0.12.0",
+    "tm-logging": "^1.0.0"
+  }
+}

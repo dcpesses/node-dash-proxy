@@ -1,0 +1,17 @@
+# Ignore .DS_Store files on mac
+.DS_Store
+
+# Ignore generated files / dirs
+npm-debug.log
+build
+dist
+
+# Ignore github pages
+pages
+
+# Dependency directory
+# Commenting this out is preferred by some people, see
+# https://www.npmjs.org/doc/misc/npm-faq.html#should-i-check-my-node_modules-folder-into-git-
+node_modules
+output
+test
