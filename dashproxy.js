@@ -38,7 +38,7 @@ logging.VERBOSE = Math.floor((logging.INFO + logging.DEBUG));
 // })
 
 const logger = logging.getLogger('dash-proxy');
-// logger.setLevel(logging.DEBUG);
+logger.setLevel(logging.VERBOSE);
 // logger.addHandler(logging.StreamHandler());
 
 
@@ -182,6 +182,7 @@ class DashProxy extends HasLogger {
         if (after>0) {
             time.sleep(after);
         }
+		let _logger = this.logger;
         let _handle_mpd_tree = this.handle_mpd_tree.bind(this);
 		let _output_dir = this.output_dir;
 		let inc = (!this.i_refresh ? '-' : this.i_refresh);
@@ -190,12 +191,14 @@ class DashProxy extends HasLogger {
                 console.log(error);
             } else if (resp.status_code < 200 || resp.status_code >= 300) {
                 // this.logger.log(logging.WARNING, 'Cannot GET the MPD. Server returned %s. Retrying after %ds', (resp.status_code, retry_interval));
-				this.logger.log(logging.WARNING, 'Cannot GET the MPD. Server returned '+resp.status_code+'. Retrying after '+retry_interval);
+				_logger.log(logging.WARNING, 'Cannot GET the MPD. Server returned '+resp.status_code+'. Retrying after '+retry_interval);
                 this.refresh_mpd(retry_interval);
             } else {
-				// write to dir
-				console.log('Saving source MPD file');
-				let mpdfile = 'manifest.'+inc+'.mpd'
+				// create & save to dir
+				_logger.log(logging.INFO, 'Creating output directory');
+				mkdirp.sync(_output_dir);
+				_logger.log(logging.INFO, 'Saving source MPD file');
+				let mpdfile = 'manifest.'+inc+'.mpd';
 		        let dest = path.join(_output_dir, mpdfile);
 
 		        let fs = require('fs');
@@ -203,7 +206,7 @@ class DashProxy extends HasLogger {
 		            if (err) {
 		                console.log(err);
 		            } else {
-		                console.log(mpdfile+' saved.');
+		                _logger.log(logging.ERROR, mpdfile+' saved.');
 		            }
 		        });
 
@@ -260,7 +263,7 @@ class DashProxy extends HasLogger {
             for (let [rep_idx, representation] of representations.entries()) {
 				// console.log("\n", 'rep_idx: ', rep_idx);
 				// console.log("\n", 'representation: ', representation);
-				console.log("\n", 'representation[\'attrib\']: ', representation['attrib']);
+				// console.log("\n", 'representation[\'attrib\']: ', representation['attrib']);
 				this.logger.log(logging.VERBOSE, 'Found representation with id ' + (!representation['attrib'] || !representation['attrib']['id'] ? 'UKN' : representation.attrib.id));
                 // console.log("\n", 'VERBOSE: Found representation with id', (!representation.id ? 'UKN' : representation.id));   //attrib.get('id', 'UKN')
                 // console.log("\n", 'as_idx: ', as_idx, "\n", 'rep_idx: ', rep_idx);
@@ -293,9 +296,9 @@ class DashProxy extends HasLogger {
 			let baseUrlNode = mpd.find('BaseUrl');
 			if (baseUrlNode) {
 	            //baseUrlNode.text
-            	console.log("\n", baseUrlNode.text, "\n");
+            	// console.log("\n", baseUrlNode.text, "\n");
 			} else {
-				console.log("\n", mpd, "\n");
+				// console.log("\n", mpd, "\n");
 			}
 
             downloader.handle_mpd(mpd, this.get_base_url(mpd));
@@ -358,13 +361,13 @@ class DashDownloader extends HasLogger {
         let rep = this.mpd.representation(this.rep_addr);
         let subdir = this.mpd.base_url(this.rep_addr);
 		subdir = (subdir) ? subdir.text : null;
-        console.log("\n", '<BaseURL>: ', subdir);
+        // console.log("\n", '<BaseURL>: ', subdir);
 		let output_path = path.join(this.proxy.output_dir, subdir);
 
 		// let permissions = parseInt('0755', 8);
 		mkdirp.sync(output_path);
 		// fs.mkdirSync(path.resolve(output_path), permissions);
-		console.log('Created dir:', output_path);
+		this.logger.log(logging.VERBOSE, 'Created dir:', output_path);
 
 
         let segment_template = this.mpd.segment_template(this.rep_addr);
@@ -372,7 +375,7 @@ class DashDownloader extends HasLogger {
         let initialization_template = (!segment_template['attrib'] || !segment_template['attrib']['initialization'] ? '' : segment_template.attrib.initialization); // segment_template.attrib.get('initialization', '');
         if (initialization_template && !this.initialization_downloaded) {
             this.initialization_downloaded = true;
-            this.download_template(initialization_template, rep);
+            this.download_template(initialization_template, rep, null, subdir);
         }
         let segments = Object.assign(segment_timeline.findall('S'));
         let idx = 0;
@@ -436,7 +439,7 @@ class DashDownloader extends HasLogger {
 	        } else {
 	            // this.error('cannot download '+dest_url+' server returned ' +resp.status_code);
 				console.log('cannot download '+dest_url+' server returned ' +resp.statusCode);
-				console.log(error);
+				// console.log(error);
 	        }
 		});
 
@@ -453,9 +456,9 @@ class DashDownloader extends HasLogger {
 					? ''
 					: representation.attrib['id']
 				);
-			console.log('representation is set');
+			// console.log('representation is set');
         } else {
-			console.log('representation is null');
+			// console.log('representation is null');
 		}
         if (segment !== null) {
             args['time'] = (
@@ -463,9 +466,9 @@ class DashDownloader extends HasLogger {
 					? ''
 					: segment.attrib['t']
 				);
-			console.log('time is set');
+			// console.log('time is set');
         } else {
-			console.log('time is null');
+			// console.log('time is null');
 		}
         // template = template.format(args);
 		template = format(template, args);
@@ -500,12 +503,13 @@ class DashDownloader extends HasLogger {
         // f.close();
 		// console.log('Writing', _dest);
 		this.logger.log(logging.INFO, 'Writing '+_dest);
+		let _logger = this.logger;
         let fs = require('fs');
         fs.writeFile(dest, content, function(err) {
              if (err) {
-                 console.log(_dest+': Error writing file:', err, "\n");
+                 _logger.log(logging.ERROR, _dest+': Error writing file:', err);
              } else {
-                 console.log(_dest+': Write operation complete.', "\n");
+                 _logger.log(logging.INFO, _dest+': Write operation complete.');
 
              }
         });
