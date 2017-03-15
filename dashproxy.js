@@ -312,11 +312,13 @@ class DashProxy extends HasLogger {
         let dest = path.join(this.output_dir, 'manifest.mpd');
 
         let fs = require('fs');
+		let _info = this.info.bind(this);
+		let _error = this.error.bind(this);
         fs.writeFile(dest, content, function(err) {
             if (err) {
-                console.log(err);
+                _error(err);
             } else {
-                console.log('Write operation complete.');
+                _info('Write operation complete.');
             }
         });
 
@@ -326,9 +328,9 @@ class DashProxy extends HasLogger {
             let fs = require('fs');
             fs.writeFile(dest, content, function(err) {
                 if (err) {
-                    console.log(err);
+                    _error(err);
                 } else {
-                    console.log('save_mpds: Write operation complete.');
+                    _info('save_mpds: Write operation complete.');
                 }
             });
         }
