@@ -364,7 +364,8 @@ class DashDownloader extends HasLogger {
         let subdir = this.mpd.base_url(this.rep_addr);
 		subdir = (subdir) ? subdir.text : null;
         // console.log("\n", '<BaseURL>: ', subdir);
-		let output_path = path.join(this.proxy.output_dir, subdir);
+        this.info('subdir = ' + subdir);
+		let output_path = (subdir) ? path.join(this.proxy.output_dir, subdir) : this.proxy.output_dir;
 
 		// let permissions = parseInt('0755', 8);
 		mkdirp.sync(output_path);
@@ -377,7 +378,7 @@ class DashDownloader extends HasLogger {
         let initialization_template = (!segment_template['attrib'] || !segment_template['attrib']['initialization'] ? '' : segment_template.attrib.initialization); // segment_template.attrib.get('initialization', '');
         if (initialization_template && !this.initialization_downloaded) {
             this.initialization_downloaded = true;
-            this.download_template(initialization_template, rep, null, subdir);
+            this.download_template(initialization_template, rep, null, subdir, true);
         }
         let segments = Object.assign(segment_timeline.findall('S'));
         let idx = 0;
@@ -424,23 +425,32 @@ class DashDownloader extends HasLogger {
         }
     }
 
-    download_template(template, representation=null, segment=null, subdir=null) {
+    download_template(template, representation=null, segment=null, subdir=null, flag_mkdir=false) {
         let dest = this.render_template(template, representation, segment);
         let dest_url = this.full_url(dest);
 		let _write_file = this.write_file.bind(this);
-		//let _write = this.write;
-        this.info('requesting '+dest+' from '+dest_url);
+
+
+
+		if (subdir) dest = subdir + dest;
+
+		// create subdirs if neccessary
+		if (flag_mkdir===true && dest.indexOf('/')>=0) {
+			let subfolders = path.join(this.proxy.output_dir, dest.substr(0, dest.lastIndexOf('/')+1));
+			this.info('creating folder path '+subfolders);
+			mkdirp.sync(subfolders);
+		}
+
+        this.info('requesting '+dest);
+		let _error = this.error.bind(this);
         let r = request.get(dest_url, function(error, resp, body) {
 	        if (resp.statusCode >= 200 && resp.statusCode < 300) {
 				// console.log(resp);
 	            // this.write(dest, r.content);
-	            if (subdir)
-					_write_file(subdir + dest, body);
-				else
-	            	_write_file(dest, body);
+	            _write_file(dest, body);
 	        } else {
-	            // this.error('cannot download '+dest_url+' server returned ' +resp.status_code);
-				console.log('cannot download '+dest_url+' server returned ' +resp.statusCode);
+	            _error('cannot download '+dest_url+' server returned ' +resp.status_code);
+				// console.log('cannot download '+dest_url+' server returned ' +resp.statusCode);
 				// console.log(error);
 	        }
 		});
@@ -450,7 +460,7 @@ class DashDownloader extends HasLogger {
     render_template(template, representation=null, segment=null, subdir=null) {
 		// console.log("\n", 'template:', template);
         template = template.replace('$RepresentationID$', '{representation_id}');
-        template = template.replace('$Time$', '{time}');
+		template = template.replace('$Time$', '{time}');
 		template = template.replace('$Bandwidth$', '{bandwidth}');
         let args = {};
         if (representation !== null) {
