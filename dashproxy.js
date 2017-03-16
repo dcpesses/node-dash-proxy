@@ -451,12 +451,18 @@ class DashDownloader extends HasLogger {
 		// console.log("\n", 'template:', template);
         template = template.replace('$RepresentationID$', '{representation_id}');
         template = template.replace('$Time$', '{time}');
+		template = template.replace('$Bandwidth$', '{bandwidth}');
         let args = {};
         if (representation !== null) {
             args['representation_id'] = (
 				!representation['attrib'] || !representation['attrib']['id']
 					? ''
 					: representation.attrib['id']
+				);
+			args['bandwidth'] = (
+				!representation['attrib'] || !representation['attrib']['bandwidth']
+					? '0'
+					: representation.attrib['bandwidth']
 				);
 			// console.log('representation is set');
         } else {
