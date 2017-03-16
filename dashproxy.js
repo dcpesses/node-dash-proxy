@@ -1,11 +1,3 @@
-// #!/usr/bin/env node;
-//
-//
-// require('babel-register');
-// require('babel-core/register')({
-//     presets: ["es2015"]
-// });
-
 var path = require('path');
 var fs = require('fs');
 var time = require('time');
@@ -16,7 +8,9 @@ var elementtree = require('elementtree');
 var copy = require('copy');
 var mkdirp = require('mkdirp');
 
-// const format = require('python-format');
+// Python-esque format
+// replaces matching variables in brackets
+// with their respective values
 const format = function(str, data) {
 	var re = /{([^{}]+)}/g;
 
@@ -29,56 +23,12 @@ const format = function(str, data) {
 		return prop;
 	});
 };
-// var colored = require('colored');
 
-
-logging.VERBOSE = Math.floor((logging.INFO + logging.DEBUG));
-// logging.configure({
-// 	encoding: "ascii"
-// })
-
+// create console logger
 const logger = logging.getLogger('dash-proxy');
-logger.setLevel(logging.VERBOSE);
-// logger.addHandler(logging.StreamHandler());
 
-
+// dash namespace
 const ns = {'mpd':'urn:mpeg:dash:schema:mpd:2011'};
-
-
-/*
-class Formatter extends logging.Formatter {
-    constructor(fmt=null, datefmt=null) {
-        super(Formatter, self).__init__(fmt, datefmt);
-    }
-    format(record) {
-		return record.msg;
-        col|| = null;
-        // if (record.levelno == logging.ERROR) {
-        //     col|| = 'red';
-        // }
-        // if (record.levelno == logging.INFO) {
-        //     col|| = 'green';
-        // }
-        // if (record.levelno == logging.WARNING) {
-        //     col|| = 'yellow';
-        // }
-        // if (color) {
-        //     return colored(record.msg, color);
-        // } else {
-        //     return record.msg;
-        // }
-    }
-}
-*/
-
-// var ch = logging.StreamHandler();
-//     ch.setLevel(logging.DEBUG);
-//
-// var formatter = new Formatter();
-//     ch.Formatter = formatter;
-//
-// logger.addHandler(ch);
-
 
 
 class RepAddr extends Object {
@@ -89,7 +39,6 @@ class RepAddr extends Object {
         this.representation_idx = representation_idx;
     }
     toString() {
-        ///return 'Representation (period=%d adaptation-set=%d representation=%d)', (this.period_idx, this.adaptation_set_idx, this.representation_idx);
         return 'Representation (period=' + this.period_idx + ' adaptation-set='+this.adaptation_set_idx+' representation='+this.representation_idx+')';
     }
 };
@@ -114,9 +63,8 @@ class MpdLocator extends Object {
         let rep_st = this.representation(rep_addr).find('SegmentTemplate');
         if (rep_st !== null) {
             return rep_st;
-        } else {
-            return this.adaptation_set(rep_addr).find('SegmentTemplate');
         }
+        return this.adaptation_set(rep_addr).find('SegmentTemplate');
     }
     segment_timeline(rep_addr) {
         return this.segment_template(rep_addr).find('SegmentTimeline');
@@ -126,29 +74,38 @@ class MpdLocator extends Object {
     }
 }
 
+
 class HasLogger extends Object {
     constructor() {
         super();
-		this.verbose = this.verbose.bind(this);
-		this.info = this.info.bind(this);
+		this.trace = this.trace.bind(this);
 		this.debug = this.debug.bind(this);
-		this.warning = this.warning.bind(this);
+		this.info = this.info.bind(this);
+		this.log = this.log.bind(this);
+		this.warn = this.warn.bind(this);
 		this.error = this.error.bind(this);
+		this.fatal = this.fatal.bind(this);
     }
-    verbose(msg) {
-        this.logger.log(logging.VERBOSE, msg);
-    }
-    info(msg) {
-        this.logger.log(logging.INFO, msg);
+	trace(msg) {
+        this.logger.trace(msg);
     }
     debug(msg) {
-        this.logger.log(logging.DEBUG, msg);
+        this.logger.debug(msg);
     }
-    warning(msg) {
-        this.logger.log(logging.WARNING, msg);
+    info(msg) {
+        this.logger.info(msg);
+    }
+    log(msg) {
+        this.logger.log(msg);
+    }
+    warn(msg) {
+        this.logger.warn(msg);
     }
     error(msg) {
-        this.logger.log(logging.ERROR, msg);
+        this.logger.error(msg);
+    }
+    fatal(msg) {
+        this.logger.fatal(msg);
     }
 }
 
@@ -173,8 +130,8 @@ class DashProxy extends HasLogger {
         this.write_output_mpd = this.write_output_mpd.bind(this);
     }
     run() {
-        // this.logger.log(logging.INFO, 'Running dash proxy for stream %s. Output goes in %s', (this.mpd, this.output_dir));
-		this.logger.log(logging.INFO, 'Running dash proxy for stream '+this.mpd+'. Output goes in '+this.output_dir);
+        // this.info('Running dash proxy for stream %s. Output goes in %s', (this.mpd, this.output_dir));
+		this.info('Running dash proxy for stream '+this.mpd+'. Output goes in '+this.output_dir);
         this.refresh_mpd();
     }
     refresh_mpd(after=0) {
@@ -188,33 +145,29 @@ class DashProxy extends HasLogger {
 		let inc = (!this.i_refresh ? '-' : this.i_refresh);
         let r = request.get(this.mpd, function(error, resp, body) {
             if (error) {
-                console.log(error);
+                _logger.error(error);
             } else if (resp.status_code < 200 || resp.status_code >= 300) {
-                // this.logger.log(logging.WARNING, 'Cannot GET the MPD. Server returned %s. Retrying after %ds', (resp.status_code, retry_interval));
-				_logger.log(logging.WARNING, 'Cannot GET the MPD. Server returned '+resp.status_code+'. Retrying after '+retry_interval);
+				_logger.warn('Cannot GET the MPD. Server returned '+resp.status_code+'. Retrying after '+retry_interval);
                 this.refresh_mpd(retry_interval);
             } else {
 				// create & save to dir
-				_logger.log(logging.INFO, 'Creating output directory');
+				_logger.debug('Creating output directory');
 				mkdirp.sync(_output_dir);
-				_logger.log(logging.INFO, 'Saving source MPD file');
+				_logger.debug('Saving source MPD file');
 				let mpdfile = 'manifest.'+inc+'.mpd';
 		        let dest = path.join(_output_dir, mpdfile);
 
 		        let fs = require('fs');
 		        fs.writeFile(dest, body, function(err) {
 		            if (err) {
-		                console.log(err);
+		                _logger.error(err);
 		            } else {
-		                _logger.log(logging.ERROR, mpdfile+' saved.');
+		                _logger.info(mpdfile+' saved.');
 		            }
 		        });
 
-
-                //console.log(resp.statusCode) // 200
-                //console.log(resp.headers['content-type'])
                 elementtree.register_namespace('', ns['mpd']);
-                //console.log(body);
+
                 let mpd = elementtree.parse(body);
                 _handle_mpd_tree(mpd);
             }
@@ -225,18 +178,18 @@ class DashProxy extends HasLogger {
         let baseUrl = function (url) {
             let idx = url.lastIndexOf('/');
             if (idx >= 0) {
-                return url.slice(0,idx+1);  // url[:idx+1];
+                return url.slice(0,idx+1);
             }
             return url;
         };
 
         let base_url = baseUrl(this.mpd);
-        let location = mpd.find('Location');    //find('mpd:Location', ns);
+        let location = mpd.find('Location');
         if (location !== null) {
             base_url = baseUrl(location.text);
         }
-		// console.log(base_url);
-        let baseUrlNode = mpd.find('BaseUrl'); //find('mpd:BaseUrl', ns)
+
+        let baseUrlNode = mpd.find('BaseUrl');
         if (baseUrlNode) {
             if (baseUrlNode.text.startswith('http://') || baseUrlNode.text.startswith('https://')) {
                 base_url = baseUrl(baseUrlNode.text);
@@ -244,35 +197,32 @@ class DashProxy extends HasLogger {
                 base_url += baseUrlNode.text;
             }
         }
-		// console.log(base_url);
+
         return base_url;
     }
     handle_mpd_tree(mpd) {
         let original_mpd = Object.assign(mpd);
-        // console.log(original_mpd);
-        let periods = mpd.findall('Period');    //mpd.findall('mpd:Period', ns);
-        this.logger.log(logging.INFO, 'mpd='+periods);
-        this.logger.log(logging.VERBOSE, 'Found '+periods.length+' periods choosing the 1st one');
-        // console.log("\n", 'Periods: ', periods);
+
+        let periods = mpd.findall('Period');
+        this.debug('mpd='+periods);
+        this.debug('Found '+periods.length+' periods, choosing the 1st one');
+
         let period = periods[0];
-        let adaptation_sets = period.findall('AdaptationSet');  //('mpd:AdaptationSet', ns);
-        // console.log("\n", 'AdaptationSets: ', adaptation_sets);
+        let adaptation_sets = period.findall('AdaptationSet');
+
         for (let [as_idx, adaptation_set] of adaptation_sets.entries()) {
-            let representations = adaptation_set.findall('Representation');  //('mpd:Representation', ns);
-            // console.log("\n", 'Representations: ', representations);
+            let representations = adaptation_set.findall('Representation');
+
             for (let [rep_idx, representation] of representations.entries()) {
-				// console.log("\n", 'rep_idx: ', rep_idx);
-				// console.log("\n", 'representation: ', representation);
-				// console.log("\n", 'representation[\'attrib\']: ', representation['attrib']);
-				this.logger.log(logging.VERBOSE, 'Found representation with id ' + (!representation['attrib'] || !representation['attrib']['id'] ? 'UKN' : representation.attrib.id));
-                // console.log("\n", 'VERBOSE: Found representation with id', (!representation.id ? 'UKN' : representation.id));   //attrib.get('id', 'UKN')
-                // console.log("\n", 'as_idx: ', as_idx, "\n", 'rep_idx: ', rep_idx);
+
+				this.debug('Found representation with id ' + (!representation['attrib'] || !representation['attrib']['id'] ? 'UKN' : representation.attrib.id));
+
                 let rep_addr = new RepAddr(0, as_idx, rep_idx);
                 this.ensure_downloader(mpd, rep_addr);
             }
         }
         this.write_output_mpd(original_mpd);
-        let minimum_update_period = (!mpd['attrib'] || !mpd['attrib']['minimumUpdatePeriod'] ? '' : mpd.attrib.minimumUpdatePeriod); //.attrib.get('minimumUpdatePeriod', '');
+        let minimum_update_period = (!mpd['attrib'] || !mpd['attrib']['minimumUpdatePeriod'] ? '' : mpd.attrib.minimumUpdatePeriod);
         if (minimum_update_period) {
             // TODO parse minimum_update_period
             this.refresh_mpd(10);   //after=10
@@ -282,33 +232,21 @@ class DashProxy extends HasLogger {
     }
 
     ensure_downloader(mpd, rep_addr) {
-
-        // console.log('ensure_downloader - rep_addr: ', rep_addr);
-
         if (rep_addr in this.downloaders) {
-            this.verbose('A downloader for ' + rep_addr.toString() + ' already started');
+            this.debug('A downloader for ' + rep_addr.toString() + ' already started');
         } else {
             this.info('Starting a downloader for ' + rep_addr.toString());
             let downloader = new DashDownloader(this, rep_addr);
             this.downloaders[rep_addr] = downloader;
-            // console.log('ensure_downloader - downloaders: ', this.downloaders);
-
-			let baseUrlNode = mpd.find('BaseUrl');
-			if (baseUrlNode) {
-	            //baseUrlNode.text
-            	// console.log("\n", baseUrlNode.text, "\n");
-			} else {
-				// console.log("\n", mpd, "\n");
-			}
 
             downloader.handle_mpd(mpd, this.get_base_url(mpd));
         }
     }
     write_output_mpd(mpd) {
-        this.info('Writing the update MPD file');
-        // let content = elementtree.tostring(mpd, encoding='utf-8').decode('utf-8');
-        let content = elementtree.tostring(mpd, {'encoding':'utf-8'});  //.decode('utf-8');
-        // let content = elementtree.tostring(mpd);
+        this.info('Writing the updated MPD file');
+
+        let content = elementtree.tostring(mpd, {'encoding':'utf-8'});
+
         let dest = path.join(this.output_dir, 'manifest.mpd');
 
         let fs = require('fs');
@@ -323,7 +261,6 @@ class DashProxy extends HasLogger {
         });
 
         if (this.save_mpds) {
-            // dest = path.join(this.output_dir, 'manifest.{}.mpd'.format(this.i_refresh));
 			dest = format(path.join(this.output_dir, 'manifest.{}.mpd'), this.i_refresh);
             let fs = require('fs');
             fs.writeFile(dest, content, function(err) {
@@ -352,30 +289,26 @@ class DashDownloader extends HasLogger {
         this.render_template = this.render_template.bind(this);
         this.full_url = this.full_url.bind(this);
         this.write_file = this.write_file.bind(this);
-        // console.log("\n", 'constructor-  this.rep_addr: ', rep_addr, "\n");
     }
 
     handle_mpd(mpd, base_url) {
         this.mpd_base_url = base_url;
         this.mpd = new MpdLocator(mpd);
-        // console.log("\n", 'this.mpd: ', this.mpd);
-        // console.log("\n", 'this.rep_addr: ', this.rep_addr);
+
         let rep = this.mpd.representation(this.rep_addr);
         let subdir = this.mpd.base_url(this.rep_addr);
 		subdir = (subdir) ? subdir.text : null;
-        // console.log("\n", '<BaseURL>: ', subdir);
-        this.info('subdir = ' + subdir);
+
+        this.debug('subdir = ' + subdir);
 		let output_path = (subdir) ? path.join(this.proxy.output_dir, subdir) : this.proxy.output_dir;
 
-		// let permissions = parseInt('0755', 8);
 		mkdirp.sync(output_path);
-		// fs.mkdirSync(path.resolve(output_path), permissions);
-		this.logger.log(logging.VERBOSE, 'Created dir:', output_path);
-
+		this.debug('Created dir:', output_path);
 
         let segment_template = this.mpd.segment_template(this.rep_addr);
         let segment_timeline = this.mpd.segment_timeline(this.rep_addr);
-        let initialization_template = (!segment_template['attrib'] || !segment_template['attrib']['initialization'] ? '' : segment_template.attrib.initialization); // segment_template.attrib.get('initialization', '');
+        let initialization_template = (!segment_template['attrib'] || !segment_template['attrib']['initialization'] ? '' : segment_template.attrib.initialization); //
+
         if (initialization_template && !this.initialization_downloaded) {
             this.initialization_downloaded = true;
             this.download_template(initialization_template, rep, null, subdir, true);
@@ -392,24 +325,22 @@ class DashDownloader extends HasLogger {
         }
 
         for (let segment of segments.entries()) {
-            let duration = Number( !segment['attrib'] || !segment['attrib']['d'] ? 0 : segment.attrib.d );  // segment.attrib.get('d', '0')
-            let repeat = Number( !segment['attrib'] || !segment['attrib']['r'] ? 0 : segment.attrib.r );    // segment.attrib.get('r', '0')
+            let duration = Number( !segment['attrib'] || !segment['attrib']['d'] ? 0 : segment.attrib.d );
+            let repeat = Number( !segment['attrib'] || !segment['attrib']['r'] ? 0 : segment.attrib.r );
             idx = idx + 1;
             for (let _ of range(0, repeat)) {
 				// elem = elementtree.Element('{urn:mpeg:dash:schema:mpd:2011}S', attrib={'d':duration});
                 elem = elementtree.Element('S', {'d':duration});
                 segment_timeline.insert(idx, elem);
-                this.verbose('appding a new elem');
+                this.debug('appding a new elem');
                 idx = idx + 1;
             }
         }
-		// console.log('segment_template:', segment_template);
-		// console.log('segment_template[\'media\']:', segment_template.media);
+
         let media_template = (segment_template['attrib'] && segment_template['attrib']['media'] ? segment_template['attrib']['media'] : '');
         let next_time = 0;
         for (let segment of segment_timeline.findall('S')) {
-			// console.log(segment[0]);
-			// console.log('segment.get(\'t\'):', (!!segment.get('t')) ? segment.get('t') : -1);
+
 			let _ctime = (!!segment.get('t')) ? segment.get('t') : -1;
             let current_time = Number(_ctime);
             if (current_time == -1) {
@@ -419,7 +350,7 @@ class DashDownloader extends HasLogger {
                 next_time = current_time;
             }
 			let _time = (segment['attrib'] && segment['attrib']['d']) ? segment.attrib['d'] : 0;
-			// console.log('_ctime:', _ctime, '_time:', _time, 'segment:', segment);
+
             next_time += Number(_time);
             this.download_template(media_template, rep, segment, subdir);
         }
@@ -430,14 +361,12 @@ class DashDownloader extends HasLogger {
         let dest_url = this.full_url(dest);
 		let _write_file = this.write_file.bind(this);
 
-
-
 		if (subdir) dest = subdir + dest;
 
 		// create subdirs if neccessary
 		if (flag_mkdir===true && dest.indexOf('/')>=0) {
 			let subfolders = path.join(this.proxy.output_dir, dest.substr(0, dest.lastIndexOf('/')+1));
-			this.info('creating folder path '+subfolders);
+			this.debug('creating folder path '+subfolders);
 			mkdirp.sync(subfolders);
 		}
 
@@ -445,20 +374,17 @@ class DashDownloader extends HasLogger {
 		let _error = this.error.bind(this);
         let r = request.get(dest_url, function(error, resp, body) {
 	        if (resp.statusCode >= 200 && resp.statusCode < 300) {
-				// console.log(resp);
-	            // this.write(dest, r.content);
 	            _write_file(dest, body);
 	        } else {
-	            _error('cannot download '+dest_url+' server returned ' +resp.status_code);
-				// console.log('cannot download '+dest_url+' server returned ' +resp.statusCode);
-				// console.log(error);
+	            _error('cannot download '+dest_url+'; server returned ' +resp.statusCode);
+
 	        }
 		});
 
     }
 
     render_template(template, representation=null, segment=null, subdir=null) {
-		// console.log("\n", 'template:', template);
+
         template = template.replace('$RepresentationID$', '{representation_id}');
 		template = template.replace('$Time$', '{time}');
 		template = template.replace('$Bandwidth$', '{bandwidth}');
@@ -474,9 +400,9 @@ class DashDownloader extends HasLogger {
 					? '0'
 					: representation.attrib['bandwidth']
 				);
-			// console.log('representation is set');
+			this.trace('representation is set');
         } else {
-			// console.log('representation is null');
+			this.trace('representation is null');
 		}
         if (segment !== null) {
             args['time'] = (
@@ -484,27 +410,13 @@ class DashDownloader extends HasLogger {
 					? ''
 					: segment.attrib['t']
 				);
-			// console.log('time is set');
+			this.trace('time is set');
         } else {
-			// console.log('time is null');
+			this.trace('time is null');
 		}
-        // template = template.format(args);
 		template = format(template, args);
         return template;
     }
-
-	static format(str, data) {
-		var re = /{([^{}]+)}/g;
-
-		return str.replace(/{([^{}]+)}/g, function(match, val) {
-			var prop = data;
-			val.split('.').forEach(function(key) {
-				prop = prop[key];
-			});
-
-			return prop;
-		});
-	}
 
     full_url(dest) {
         return this.mpd_base_url + dest;
@@ -512,22 +424,20 @@ class DashDownloader extends HasLogger {
 
     write_file(dest, content) {
 		let _dest = dest;
+
 		let _pos = dest.indexOf('?')==-1 ? dest.length : dest.indexOf('?');
-        dest = dest.slice(0, _pos); //dest[0:dest.rfind('?')];
-		// console.log('dest',dest);
+        dest = dest.slice(0, _pos);
         dest = path.join(this.proxy.output_dir, dest);
-        // let f = open(dest, 'wb');
-        // f.write(content);
-        // f.close();
-		// console.log('Writing', _dest);
-		this.logger.log(logging.INFO, 'Writing '+_dest);
-		let _logger = this.logger;
+
+		this.debug('Writing '+_dest);
+		let _error = this.error.bind(this);
+		let _info = this.info.bind(this);
         let fs = require('fs');
         fs.writeFile(dest, content, function(err) {
              if (err) {
-                 _logger.log(logging.ERROR, _dest+': Error writing file:', err);
+                 _error(_dest+': Error writing file:', err);
              } else {
-                 _logger.log(logging.INFO, _dest+': Write operation complete.');
+                 _info(_dest+': Write operation complete.');
 
              }
         });
@@ -535,7 +445,7 @@ class DashDownloader extends HasLogger {
 }
 
 function run(args) {
-    let _level = (args.v) ? logging.INFO : logging.VERBOSE;
+    let _level = (!args.q) ? ((!args.v) ? 'INFO' : 'DEBUG') : 'ERROR';
     logger.setLevel(_level);
     let proxy = new DashProxy(
         args['mpd'],   //mpd
@@ -549,7 +459,8 @@ function run(args) {
 function main() {
     let parser = argparse.ArgumentParser();
     parser.addArgument('mpd', {help: 'URL of the MPEG-DASH stream to download / cache.'});
-    parser.addArgument('-v', {action:'storeTrue', help: 'Verbose mode'});
+	parser.addArgument('-q', {action:'storeTrue', help: 'Quiet mode. Will only log output if errors occur.'});
+	parser.addArgument('-v', {action:'storeTrue', help: 'Verbose mode'});
     parser.addArgument('-d', {action:'storeTrue', help: 'Saves the cached stream in the output directory. (Older content from live streams will not be deleted.)'});
     parser.addArgument('-o', {default:'.', help: 'Output directory to use for caching the stream.'});
     parser.addArgument('--save-individual-mpds', {action:'storeTrue', help:'Saves each refreshed MPD in a separate file'});
