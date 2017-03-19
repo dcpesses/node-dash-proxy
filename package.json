@@ -1,31 +1,25 @@
 {
   "name": "node-dash-proxy",
-  "version": "0.0.1",
-  "description": "",
-  "main": "bootstrapper.js",
+  "version": "0.0.2",
+  "description": "Node script to parse DASH manifests and download / mirror its segments",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dcpesses/node-dash-proxy.git"
+  },
+  "main": "dashproxy.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node ./bootstrapper.js"
+    "test": "rm -rf output && node ./dashproxy.js -v -o output -d 'https://drmencodingmediaserver.streaming.mediaservices.windows.net/22877e25-6501-4296-862a-84660d0fb84a/ba5f0d3a-b218-8c9d-0db1-91c27d99b499.ism/manifest(format=mpd-time-csf)'",
+    "start": "node ./dashproxy.js"
   },
   "author": "",
   "license": "ISC",
   "dependencies": {
     "argparse": "^1.0.9",
-    "babel-cli": "^6.23.0",
-    "babel-preset-env": "^1.2.1",
-    "babel-preset-es2015": "^6.22.0",
-    "babel-preset-stage-0": "^6.22.0",
-    "copy": "^0.3.0",
     "elementtree": "^0.1.7",
     "log4js": "^1.1.1",
-    "logging": "^3.2.0",
     "mkdirp": "^0.5.1",
     "path": "^0.12.7",
-    "plogging": "0.0.4",
-    "python-format": "^1.0.2",
     "request": "^2.80.0",
-    "requests": "^0.1.7",
-    "time": "^0.12.0",
-    "tm-logging": "^1.0.0"
+    "time": "^0.12.0"
   }
 }

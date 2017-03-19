@@ -1,12 +1,11 @@
-var path = require('path');
-var fs = require('fs');
-var time = require('time');
+const path = require('path');
+const fs = require('fs');
+const time = require('time');
 const logging = require('log4js');
-var argparse = require('argparse');
-var request = require('request');
-var elementtree = require('elementtree');
-var copy = require('copy');
-var mkdirp = require('mkdirp');
+const argparse = require('argparse');
+const request = require('request');
+const elementtree = require('elementtree');
+const mkdirp = require('mkdirp');
 
 // Python-esque format
 // replaces matching variables in brackets
