@@ -109,13 +109,14 @@ class HasLogger extends Object {
 }
 
 class DashProxy extends HasLogger {
-    constructor(mpd, output_dir, download, save_mpds=false) {
-        super(mpd, output_dir, download, save_mpds=false);
+    constructor(mpd, output_dir, download, save_mpds=false, limit) {
+        super(mpd, output_dir, download, save_mpds=false, limit);
         this.logger = logger;
         this.mpd = mpd;
         this.output_dir = output_dir;
         this.download = download;
         this.save_mpds = save_mpds;
+		this.rep_limit = limit;
         this.i_refresh = 0;
         this.downloaders = {};
         this.retry_interval = 10;
@@ -199,15 +200,16 @@ class DashProxy extends HasLogger {
 
         return base_url;
     }
-    handle_mpd_tree(mpd) {
+    handle_mpd_tree(mpd, per_idx=0) {
         let original_mpd = Object.assign(mpd);
 
         let periods = mpd.findall('Period');
         this.debug('mpd='+periods);
-        this.debug('Found '+periods.length+' periods, choosing the 1st one');
+        this.debug('Found '+periods.length+' period(s), selecting period at position '+per_idx);
 
-        let period = periods[0];
+        let period = periods[per_idx];
         let adaptation_sets = period.findall('AdaptationSet');
+		let rep_limit = this.rep_limit;
 
         for (let [as_idx, adaptation_set] of adaptation_sets.entries()) {
             let representations = adaptation_set.findall('Representation');
@@ -216,8 +218,14 @@ class DashProxy extends HasLogger {
 
 				this.debug('Found representation with id ' + (!representation['attrib'] || !representation['attrib']['id'] ? 'UKN' : representation.attrib.id));
 
-                let rep_addr = new RepAddr(0, as_idx, rep_idx);
-                this.ensure_downloader(mpd, rep_addr);
+				if (rep_limit>0 && rep_idx>=rep_limit) {
+					this.warn('Skipping Representation (rep_idx: '+rep_idx+', rep_limit:'+rep_limit+')');
+					continue;
+				} else {
+					this.info('Adding Representation (rep_idx: '+rep_idx+', rep_limit:'+rep_limit+')');
+					let rep_addr = new RepAddr(per_idx, as_idx, rep_idx);
+					this.ensure_downloader(mpd, rep_addr);
+				}
             }
         }
         this.write_output_mpd(original_mpd);
@@ -255,7 +263,7 @@ class DashProxy extends HasLogger {
             if (err) {
                 _error(err);
             } else {
-                _info('Write operation complete.');
+                _info('manifest.mpd: Write operation complete.');
             }
         });
 
@@ -312,36 +320,38 @@ class DashDownloader extends HasLogger {
             this.initialization_downloaded = true;
             this.download_template(initialization_template, rep, null, subdir, true);
         }
-        let segments = Object.assign(segment_timeline.findall('S'));
-        let idx = 0;
 
-        // python polyfill
-        function range(start, end, step) {
-            var _end = end || start;
-            var _start = end ? start : 0;
-            var _step = step || 1;
-            return Array((_end - _start) / _step).fill(0).map((v, i) => _start + (i * _step));
-        }
+		let idx = 0;
 
-        for (let segment of segments.entries()) {
-            let duration = Number( !segment['attrib'] || !segment['attrib']['d'] ? 0 : segment.attrib.d );
-            let repeat = Number( !segment['attrib'] || !segment['attrib']['r'] ? 0 : segment.attrib.r );
+		// make sure first segment has a t (start time) value
+		if (segment_timeline.findall('S')[0].get('t')===undefined) {
+			segment_timeline.findall('S')[0].set('t', '0');
+		}
+
+
+		let _log = this.info.bind(this);
+
+        for (let [st_idx, _segment] of segment_timeline.findall('S').entries()) {
+            let duration = !_segment.get('d') ? 0 : Number( _segment.get('d') );
+            let repeat = !_segment.get('r') ? 0 : Number( _segment.get('r') );
             idx = idx + 1;
-            for (let _ of range(0, repeat)) {
-				// elem = elementtree.Element('{urn:mpeg:dash:schema:mpd:2011}S', attrib={'d':duration});
-                elem = elementtree.Element('S', {'d':duration});
-                segment_timeline.insert(idx, elem);
-                this.debug('appding a new elem');
-                idx = idx + 1;
-            }
+			for (var i = 0; i < repeat; i++) {
+				let elem = elementtree.Element('S', {'d':duration});
+				// segment_timeline.insert(idx, elem);
+				// workaround for node-elementtree issue:
+				// "TypeError: Cannot read property 'iter' of undefined"
+				segment_timeline._children.splice(idx, 0, elem);
+				this.debug('appending a new elem');
+				idx = idx + 1;
+			}
         }
 
         let media_template = (segment_template['attrib'] && segment_template['attrib']['media'] ? segment_template['attrib']['media'] : '');
         let next_time = 0;
         for (let segment of segment_timeline.findall('S')) {
 
-			let _ctime = (!!segment.get('t')) ? segment.get('t') : -1;
-            let current_time = Number(_ctime);
+			let start_time = (!!segment.get('t')) ? segment.get('t') : -1;
+            let current_time = Number(start_time);
             if (current_time == -1) {
 				segment['attrib'] = segment['attrib'] || {};
                 segment['attrib']['t'] = next_time;
@@ -450,7 +460,8 @@ function run(args) {
         args['mpd'],   //mpd
         args['o'],     //output_dir
         args['d'],     //download
-        args['save_individual_mpds']   //save_mpds
+        args['save_individual_mpds'],   //save_mpds
+		args['limit']	//rep index
     );
     return proxy.run();
 }
@@ -462,7 +473,8 @@ function main() {
 	parser.addArgument('-v', {action:'storeTrue', help: 'Verbose mode'});
     parser.addArgument('-d', {action:'storeTrue', help: 'Saves the cached stream in the output directory. (Older content from live streams will not be deleted.)'});
     parser.addArgument('-o', {default:'.', help: 'Output directory to use for caching the stream.'});
-    parser.addArgument('--save-individual-mpds', {action:'storeTrue', help:'Saves each refreshed MPD in a separate file'});
+	parser.addArgument('--save-individual-mpds', {action:'storeTrue', help:'Saves each refreshed MPD in a separate file'});
+	parser.addArgument('--limit', {default:0, help:'Max number of Representations to parse for each AdaptationSet. Set to 0 to disable.'});
     let args = parser.parseArgs();
     run(args);
 }

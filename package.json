@@ -1,6 +1,6 @@
 {
   "name": "node-dash-proxy",
-  "version": "0.0.2",
+  "version": "0.1.0",
   "description": "Node script to parse DASH manifests and download / mirror its segments",
   "repository": {
     "type": "git",
@@ -8,7 +8,7 @@
   },
   "main": "dashproxy.js",
   "scripts": {
-    "test": "rm -rf output && node ./dashproxy.js -v -o output -d 'https://drmencodingmediaserver.streaming.mediaservices.windows.net/22877e25-6501-4296-862a-84660d0fb84a/ba5f0d3a-b218-8c9d-0db1-91c27d99b499.ism/manifest(format=mpd-time-csf)'",
+    "test": "rm -rf output && node ./dashproxy.js -v --limit 1 -o output -d 'https://drmencodingmediaserver.streaming.mediaservices.windows.net/22877e25-6501-4296-862a-84660d0fb84a/ba5f0d3a-b218-8c9d-0db1-91c27d99b499.ism/manifest(format=mpd-time-csf)'",
     "start": "node ./dashproxy.js"
   },
   "author": "",
