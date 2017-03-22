@@ -1,6 +1,6 @@
 {
   "name": "node-dash-proxy",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Node script to parse DASH manifests and download / mirror its segments",
   "repository": {
     "type": "git",
